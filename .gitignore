@@ -1,0 +1,31 @@
+# dataset
+dataset/
+
+# v1 model artifacts
+models/v1/*.pkl
+models/v1/metadata.json
+
+# v2 model artifacts
+models/v2/distilbert_sentiment/
+models/v2/distilbert_tokenizer/
+models/v2/metadata.json
+
+# v3 model artifacts
+models/v3/roberta_sentiment/
+models/v3/roberta_tokenizer/
+models/v3/metadata.json
+
+# training output
+results/
+logs/
+models_v1_export.zip
+models_v2_export.zip
+models_v3_export.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.env
+
+# Jupyter
+.ipynb_checkpoints/
