@@ -40,7 +40,7 @@ Sentiment Analysis/
 ├── sentiment_analysis.ipynb           # V1: TF-IDF + traditional ML
 ├── sentiment_analysis_v2.ipynb        # V2: DistilBERT fine-tuning
 ├── sentiment_analysis_v3.ipynb        # V3: RoBERTa fine-tuning
-├── predict.py                         # CLI inference script (V1)
+├── predict.py                         # CLI inference script (V3)
 ├── requirements.txt
 └── README.md
 ```
