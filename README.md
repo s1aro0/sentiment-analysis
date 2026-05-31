@@ -139,6 +139,3 @@ Python · Pandas · NumPy · Matplotlib · Seaborn · NLTK · scikit-learn · Jo
 
 ---
 
-## CV Bullet
-
-> Built a three-version sentiment classifier on the IMDB 50K dataset — progressing from TF-IDF + Linear SVM (F1 0.91) to fine-tuned DistilBERT (F1 0.92) to fine-tuned RoBERTa (F1 0.96) — reducing the error rate by more than half; implemented full NLP pipeline including EDA, text preprocessing, error analysis, and model serialization with Joblib and Hugging Face.
