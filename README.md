@@ -1,29 +1,124 @@
 # Movie Review Sentiment Analysis
 
-Binary sentiment classification on the IMDB 50K movie reviews dataset. The project is structured
-as three versions, each building on the last — from classic TF-IDF features to fine-tuned transformers.
+This is a binary sentiment classification project on the IMDB 50K movie reviews dataset. I built it
+in three versions, each one improving on the last: starting with classic TF-IDF features and a Linear
+SVM, then moving to a fine-tuned DistilBERT, and finally a fine-tuned RoBERTa.
 
-**Best result:** F1 = 0.9581 with fine-tuned RoBERTa (V3)
+My best model is the RoBERTa version (V3), which reaches an F1 of 0.9581 and gets the error rate
+down to 4.22%.
 
 ---
 
-## Project Versions
+## Results at a Glance
 
-| Version | Approach | F1 Score | Error Rate |
-|---------|----------|----------|------------|
-| V1 | TF-IDF (bigrams) + Linear SVM | 0.9135 | 8.68% |
-| V2 | DistilBERT fine-tuned (3 epochs) | 0.9224 | 7.82% |
-| V3 | RoBERTa-base fine-tuned (4 epochs, max_len=512) | **0.9581** | **4.22%** |
+| Version | Approach | Accuracy | F1 Score | Error Rate |
+|---------|----------|----------|----------|------------|
+| V1 | TF-IDF (bigrams) + Linear SVM | 0.9132 | 0.9135 | 8.68% |
+| V2 | DistilBERT fine-tuned (3 epochs) | 0.9218 | 0.9224 | 7.82% |
+| V3 | RoBERTa-base fine-tuned (4 epochs, max_len=512) | **0.9578** | **0.9581** | **4.22%** |
+
+Each version is a clear step up. Going from the TF-IDF baseline to RoBERTa more than halved the
+number of misclassified reviews on the 10,000-review test set.
+
+![Model progression across V1, V2, and V3](images/08_version_comparison.png)
+
+Accuracy, precision, recall, and F1 all climb steadily from V1 to V3.
 
 ---
 
 ## Dataset
 
-[IMDB Dataset of 50K Movie Reviews](https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews) — Kaggle
+[IMDB Dataset of 50K Movie Reviews](https://www.kaggle.com/datasets/lakshmi25npathi/imdb-dataset-of-50k-movie-reviews)
 
-- 50,000 reviews (25,000 positive, 25,000 negative)
-- Perfectly balanced binary classification task
-- Columns: `review` (raw text), `sentiment` (`positive` / `negative`)
+- 50,000 reviews, split evenly into 25,000 positive and 25,000 negative
+- A perfectly balanced binary task, so accuracy is a meaningful headline metric
+- Two columns: `review` (raw text) and `sentiment` (`positive` / `negative`)
+
+The dataset is exactly balanced, so I didn't need to do any class rebalancing before training.
+
+---
+
+## Exploratory Data Analysis
+
+Before modeling I spent some time looking at how the reviews are structured and what actually
+separates the two classes.
+
+**Review length.** Most reviews are between roughly 100 and 300 words, with a long tail of very
+detailed ones. Positive and negative reviews have almost identical length distributions, so the
+length of a review on its own doesn't tell you much about its sentiment.
+
+**Most frequent words.** The top words in both classes are generic film vocabulary (`film`, `movie`,
+`one`, `like`). The more interesting differences appear a bit further down the list: words like
+`great`, `good`, and `story` rank high in positive reviews, while `bad` and `even` stand out in
+negative ones. That's the kind of signal the models end up learning to weight.
+
+For the model preprocessing I remove HTML tags, lowercase everything, and strip stopwords, but I
+keep negation words like `not`, `never`, and `didn't` on purpose. A default stopword list would throw
+those away, and they're exactly the words that flip a review's sentiment.
+
+---
+
+## V1 — TF-IDF + Traditional Machine Learning
+
+The first version is a full classical NLP pipeline: EDA, text cleaning, TF-IDF features, training
+four models, evaluation, error analysis, and saving the final model.
+
+| Model | Accuracy | Precision | Recall | F1 Score |
+|-------|----------|-----------|--------|----------|
+| **Linear SVM** | **0.9132** | **0.9102** | **0.9168** | **0.9135** |
+| Logistic Regression | 0.9076 | 0.9010 | 0.9158 | 0.9084 |
+| Multinomial Naive Bayes | 0.8835 | 0.8778 | 0.8910 | 0.8844 |
+| Random Forest | 0.8697 | 0.8723 | 0.8662 | 0.8692 |
+
+TF-IDF settings: bigrams, `max_features=50000`, `sublinear_tf=True`, `min_df=2`.
+
+The two linear models clearly do best on the sparse, high-dimensional TF-IDF features. Random Forest
+is both the weakest and the slowest to train here, which makes sense given how sparse the input is.
+
+![V1 model comparison](images/04_v1_model_comparison.png)
+
+I picked Linear SVM as the V1 model since it edges out Logistic Regression on every metric.
+
+**Error analysis.** Out of the 10,000 test reviews, the SVM gets about 868 wrong, and those errors
+split fairly evenly between false positives and false negatives. So the model isn't leaning toward
+one class over the other.
+
+---
+
+## V2 — DistilBERT Fine-Tuning
+
+For V2 I dropped the hand-built TF-IDF features and fine-tuned a `distilbert-base-uncased`
+transformer (66M parameters) instead, letting it learn contextual representations straight from the
+text.
+
+Training setup: 3 epochs, `lr=2e-5`, `max_length=256`, batch size 32 on a Tesla T4 GPU (~27 minutes).
+
+| Model | Accuracy | Precision | Recall | F1 Score |
+|-------|----------|-----------|--------|----------|
+| DistilBERT | 0.9218 | 0.9155 | 0.9294 | 0.9224 |
+
+![DistilBERT confusion matrix](images/06_v2_distilbert_confusion.png)
+
+DistilBERT makes 782 errors on the test set, already a step up from the V1 baseline.
+
+---
+
+## V3 — RoBERTa Fine-Tuning
+
+V3 upgrades to `roberta-base` (125M parameters) and uses the full 512-token context window, so it can
+read entire long reviews instead of cutting them off early.
+
+Training setup: 4 epochs, `lr=1e-5`, `max_length=512`, batch size 16 on a Tesla T4 GPU (~150 minutes).
+The training loss converged to 0.258, compared with 0.411 in V2.
+
+| Model | Accuracy | Precision | Recall | F1 Score |
+|-------|----------|-----------|--------|----------|
+| **RoBERTa** | **0.9578** | **0.9524** | **0.9638** | **0.9581** |
+
+![RoBERTa confusion matrix](images/07_v3_roberta_confusion.png)
+
+RoBERTa only makes 422 errors on the 10,000-review test set, down from 782 in V2 and 868 in V1. This
+is the best model in the project and the one I use for inference.
 
 ---
 
@@ -31,6 +126,7 @@ as three versions, each building on the last — from classic TF-IDF features to
 
 ```
 Sentiment Analysis/
+├── images/                            # result plots used in this README
 ├── dataset/
 │   └── IMDB Dataset.csv               # raw data (not pushed to GitHub)
 ├── models/
@@ -40,54 +136,10 @@ Sentiment Analysis/
 ├── sentiment_analysis.ipynb           # V1: TF-IDF + traditional ML
 ├── sentiment_analysis_v2.ipynb        # V2: DistilBERT fine-tuning
 ├── sentiment_analysis_v3.ipynb        # V3: RoBERTa fine-tuning
-├── predict.py                         # CLI inference script (V1)
+├── predict.py                         # CLI inference script (V3 RoBERTa)
 ├── requirements.txt
 └── README.md
 ```
-
----
-
-## V1 — TF-IDF + Traditional ML
-
-Full pipeline: EDA, text cleaning, TF-IDF feature extraction, training four models, evaluation,
-error analysis, and model saving.
-
-| Model | Accuracy | Precision | Recall | F1 Score |
-|-------|----------|-----------|--------|----------|
-| Linear SVM | 0.9132 | 0.9102 | 0.9168 | 0.9135 |
-| Logistic Regression | 0.9076 | 0.9010 | 0.9158 | 0.9084 |
-| Multinomial Naive Bayes | 0.8835 | 0.8778 | 0.8910 | 0.8844 |
-| Random Forest | 0.8697 | 0.8723 | 0.8662 | 0.8692 |
-
-**TF-IDF config:** bigrams, `max_features=50000`, `sublinear_tf=True`, `min_df=2`
-
-Text preprocessing removes HTML tags, lowercases, and strips stopwords — with negation words
-(`not`, `never`, `didn't`, etc.) deliberately kept to preserve sentiment signal.
-
----
-
-## V2 — DistilBERT Fine-Tuning
-
-Replaces TF-IDF with a fine-tuned `distilbert-base-uncased` transformer (66M parameters).
-Training: 3 epochs, `lr=2e-5`, `max_length=256`, batch size 32 on Kaggle T4 GPU (~27 min).
-
-| Model | Accuracy | Precision | Recall | F1 Score |
-|-------|----------|-----------|--------|----------|
-| DistilBERT | 0.9218 | 0.9155 | 0.9294 | 0.9224 |
-
----
-
-## V3 — RoBERTa Fine-Tuning
-
-Upgrades to `roberta-base` (125M parameters) with the full 512-token context window.
-Training: 4 epochs, `lr=1e-5`, `max_length=512`, batch size 16 on Kaggle T4 GPU (~150 min).
-Training loss converged to 0.258 vs 0.411 in V2.
-
-| Model | Accuracy | Precision | Recall | F1 Score |
-|-------|----------|-----------|--------|----------|
-| RoBERTa | 0.9578 | 0.9524 | 0.9638 | 0.9581 |
-
-Error count dropped from 782 (V2) to 422 (V3) on the 10,000-review test set.
 
 ---
 
@@ -100,14 +152,14 @@ pip install -r requirements.txt
 python -c "import nltk; nltk.download('stopwords')"
 ```
 
-Run the notebooks end-to-end on Kaggle (GPU recommended for V2 and V3).
+The notebooks run end to end, and V2 and V3 need a GPU to train in a reasonable time.
 
 ---
 
 ## Inference
 
-Uses the V3 RoBERTa model. Download `models_v3_export.zip` from the Kaggle output panel after
-running `sentiment_analysis_v3.ipynb`, extract it into `models/v3/`, then:
+Inference uses the V3 RoBERTa model. After training `sentiment_analysis_v3.ipynb`, extract the
+exported model into `models/v3/`, then:
 
 ```bash
 # Single review
@@ -121,24 +173,6 @@ python predict.py --file reviews.txt
 
 ---
 
-## Running on Kaggle
-
-All three notebooks were developed and run on [Kaggle](https://www.kaggle.com) using the following environment:
-
-- **Python** 3.10
-- **GPU** Tesla T4 (15.6 GB VRAM)
-- **V2 training time:** ~27 minutes
-- **V3 training time:** ~150 minutes
-
-
----
-
 ## Tech Stack
 
 Python · Pandas · NumPy · Matplotlib · Seaborn · NLTK · scikit-learn · Joblib · PyTorch · Hugging Face Transformers
-
----
-
-## CV Bullet
-
-> Built a three-version sentiment classifier on the IMDB 50K dataset — progressing from TF-IDF + Linear SVM (F1 0.91) to fine-tuned DistilBERT (F1 0.92) to fine-tuned RoBERTa (F1 0.96) — reducing the error rate by more than half; implemented full NLP pipeline including EDA, text preprocessing, error analysis, and model serialization with Joblib and Hugging Face.
